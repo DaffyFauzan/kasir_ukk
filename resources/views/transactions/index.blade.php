@@ -11,12 +11,18 @@
                 <div class="p-6 text-gray-900">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-lg font-semibold">Transaction List</h3>
-                        @if(Auth::check() && Auth::user()->role !== 'Administrator')
-                            <a href="{{ route('transactions.create') }}"
-                                class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
-                                Add Transaction
+                        <div class="flex space-x-2">
+                            @if(Auth::check() && Auth::user()->role !== 'Administrator')
+                                <a href="{{ route('transactions.create') }}"
+                                    class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                    Add Transaction
+                                </a>
+                            @endif
+                            <a href="{{ route('transactions.export') }}"
+                                class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">
+                                Export to Excel
                             </a>
-                        @endif
+                        </div>
                     </div>
                     <table class="table-auto w-full border-collapse border border-gray-300">
                         <thead>
@@ -33,7 +39,9 @@
                         <tbody>
                             @foreach ($transactions as $transaction)
                                 <tr class="hover:bg-gray-50">
-                                    <td class="border border-gray-300 px-4 py-2">{{ $transaction->sale_date }}</td>
+                                    <td class="border border-gray-300 px-4 py-2">
+                                        {{ \Carbon\Carbon::parse($transaction->created_at)->format('Y-m-d H:i:s') }}
+                                    </td>
                                     <td class="border border-gray-300 px-4 py-2">
                                         {{ $transaction->customer->name ?? 'Non-Member' }}
                                     </td>
@@ -52,6 +60,10 @@
                                             class="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">
                                             View Details
                                         </button>
+                                        <a href="{{ route('transactions.receipt', $transaction->id) }}"
+                                            class="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
+                                            Export PDF
+                                        </a>
                                     </td>
                                 </tr>
                             @endforeach

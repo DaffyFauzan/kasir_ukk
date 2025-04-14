@@ -26,7 +26,9 @@
                                 <th class="border border-gray-300 px-4 py-2 text-left">Name</th>
                                 <th class="border border-gray-300 px-4 py-2 text-left">Price</th>
                                 <th class="border border-gray-300 px-4 py-2 text-left">Stock</th>
-                                <th class="border border-gray-300 px-4 py-2 text-center">Actions</th>
+                                @if(Auth::check() && Auth::user()->role !== 'Staff')
+                                    <th class="border border-gray-300 px-4 py-2 text-center">Actions</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -45,8 +47,8 @@
                                     <td class="border border-gray-300 px-4 py-2">
                                         {{ 'Rp ' . number_format($product->price, 0, ',', '.') }}</td>
                                     <td class="border border-gray-300 px-4 py-2">{{ $product->stock }}</td>
-                                    <td class="border border-gray-300 px-4 py-2 text-center">
-                                        @if(Auth::check() && Auth::user()->role !== 'Staff')
+                                    @if(Auth::check() && Auth::user()->role !== 'Staff')
+                                        <td class="border border-gray-300 px-4 py-2 text-center">
                                             <button class="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">
                                                 <a href="{{ route('products.edit', $product) }}">
                                                     Edit
@@ -60,8 +62,8 @@
                                                 class="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600">
                                                 Add Stock
                                             </button>
-                                        @endif
-                                    </td>
+                                        </td>
+                                    @endif
                                 </tr>
                             @endforeach
                         </tbody>

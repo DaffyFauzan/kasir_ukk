@@ -34,4 +34,13 @@ class Sale extends Model
     {
         return $this->hasMany(DetailSale::class);
     }
+
+    public function createSaleData($pointsUsed, $customer)
+    {
+        return [
+            'poin' => $pointsUsed,
+            'total_poin' => $customer ? $customer->poin : 0,
+            'customer_id' => $customer ? $customer->id : null,
+        ];
+    }
 }
