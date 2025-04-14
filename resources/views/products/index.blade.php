@@ -56,6 +56,10 @@
                                                 class="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
                                                 Delete
                                             </button>
+                                            <button onclick="showStockModal({{ $product->id }})"
+                                                class="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600">
+                                                Add Stock
+                                            </button>
                                         @endif
                                     </td>
                                 </tr>
@@ -94,6 +98,30 @@
         </div>
     </div>
 
+    <div id="addStockModal" class="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50 hidden">
+        <div class="bg-white rounded-lg shadow-lg p-6 w-96">
+            <h3 class="text-lg font-semibold mb-4">Add Stock</h3>
+            <form id="addStockForm" method="POST">
+                @csrf
+                @method('PATCH')
+                <div class="mb-4">
+                    <label for="stock" class="block text-gray-700 font-medium mb-2">Stock Quantity</label>
+                    <input type="number" id="stock" name="stock" class="w-full border border-gray-300 rounded-md px-3 py-2" required>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" onclick="hideStockModal()"
+                        class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 mr-2">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">
+                        Update Stock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         function showModal(productId) {
             const deleteData = document.getElementById('deleteData');
@@ -105,6 +133,18 @@
         function hideModal() {
             const deleteData = document.getElementById('deleteData');
             deleteData.classList.add('hidden');
+        }
+
+        function showStockModal(productId) {
+            const addStockModal = document.getElementById('addStockModal');
+            const addStockForm = document.getElementById('addStockForm');
+            addStockForm.action = `/products/${productId}/add-stock`;
+            addStockModal.classList.remove('hidden');
+        }
+
+        function hideStockModal() {
+            const addStockModal = document.getElementById('addStockModal');
+            addStockModal.classList.add('hidden');
         }
     </script>
 

@@ -25,6 +25,7 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::resource('products', ProductController::class);
+Route::patch('/products/{product}/add-stock', [ProductController::class, 'addStock'])->name('products.add-stock');
 
 Route::middleware(['auth', 'role:Administrator'])->group(function () {
     Route::resource('users', UserController::class);
