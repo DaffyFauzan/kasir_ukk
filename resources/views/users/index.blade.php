@@ -39,11 +39,13 @@
                                                 Edit
                                             </a>
                                         </button>
-                                        <button type="button"
-                                            onclick="showModal('{{ $user->id }}')"
-                                            class="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
-                                            Delete
-                                        </button>
+                                        @if(Auth::id() !== $user->id)
+                                            <button type="button"
+                                                onclick="showModal('{{ $user->id }}')"
+                                                class="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
+                                                Delete
+                                            </button>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
@@ -76,10 +78,10 @@
     </div>
 
     <script>
-        function showModal(productId) {
+        function showModal(userId) {
             const deleteData = document.getElementById('deleteData');
             const deleteForm = document.getElementById('deleteForm');
-            deleteForm.action = `/products/${productId}`;
+            deleteForm.action = `/users/${userId}`;
             deleteData.classList.remove('hidden');
         }
 

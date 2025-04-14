@@ -29,6 +29,7 @@ Route::patch('/products/{product}/add-stock', [ProductController::class, 'addSto
 
 Route::middleware(['auth', 'role:Administrator'])->group(function () {
     Route::resource('users', UserController::class);
+    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
 });
 
 require __DIR__.'/auth.php';
