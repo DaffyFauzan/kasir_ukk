@@ -10,7 +10,31 @@
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
                     <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-semibold">Product List</h3>
+                        <div class="flex items-center space-x-4 flex-1">
+                            <h3 class="text-lg font-semibold">Product List</h3>
+                            <div class="flex items-center space-x-2">
+
+                                <select id="entriesSelect" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option value="10">10 entries</option>
+                                    <option value="25">25 entries</option>
+                                    <option value="50">50 entries</option>
+                                    <option value="100">100 entries</option>
+                                </select>
+
+                                <div class="relative flex-1 max-w-md">
+                                    <input type="text"
+                                        id="searchInput"
+                                        placeholder="Search products..."
+                                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 pl-10 pr-4 py-2"
+                                    >
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         @if(Auth::check() && Auth::user()->role !== 'Staff')
                             <a href="{{ route('products.create') }}"
                                 class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
@@ -73,6 +97,22 @@
                             No products available.
                         </div>
                     @endif
+                    <div class="mt-4 flex items-center justify-between">
+                        <div class="text-sm text-gray-700">
+                            Showing <span id="startEntry">1</span> to <span id="endEntry">10</span> of <span id="totalEntries">0</span> entries
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="prevPage" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50">
+                                Previous
+                            </button>
+                            <div id="pageNumbers" class="flex space-x-1">
+
+                            </div>
+                            <button id="nextPage" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50">
+                                Next
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -148,6 +188,108 @@
             const addStockModal = document.getElementById('addStockModal');
             addStockModal.classList.add('hidden');
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            const entriesSelect = document.getElementById('entriesSelect');
+            const tbody = document.querySelector('tbody');
+            const originalRows = [...tbody.querySelectorAll('tr')];
+            let currentPage = 1;
+            let entriesPerPage = parseInt(entriesSelect.value);
+            let debounceTimer;
+
+            function updateTable() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const filteredRows = originalRows.filter(row => {
+                    const id = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
+                    const name = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                    const price = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                    const stock = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
+
+                    return id.includes(searchTerm) ||
+                           name.includes(searchTerm) ||
+                           price.includes(searchTerm) ||
+                           stock.includes(searchTerm);
+                });
+
+                const totalPages = Math.ceil(filteredRows.length / entriesPerPage);
+                const startIndex = (currentPage - 1) * entriesPerPage;
+                const endIndex = Math.min(startIndex + entriesPerPage, filteredRows.length);
+
+                document.getElementById('startEntry').textContent = filteredRows.length ? startIndex + 1 : 0;
+                document.getElementById('endEntry').textContent = endIndex;
+                document.getElementById('totalEntries').textContent = filteredRows.length;
+
+                tbody.innerHTML = '';
+
+                if (filteredRows.length === 0) {
+                    const noResultsRow = document.createElement('tr');
+                    noResultsRow.innerHTML = `
+                        <td colspan="6" class="border border-gray-300 px-4 py-2 text-center text-gray-500">
+                            No products found
+                        </td>
+                    `;
+                    tbody.appendChild(noResultsRow);
+                } else {
+                    filteredRows.slice(startIndex, endIndex).forEach(row => {
+                        tbody.appendChild(row.cloneNode(true));
+                    });
+                }
+
+                updatePagination(totalPages);
+            }
+
+            function updatePagination(totalPages) {
+                const pageNumbers = document.getElementById('pageNumbers');
+                pageNumbers.innerHTML = '';
+
+                document.getElementById('prevPage').disabled = currentPage === 1;
+
+                for (let i = 1; i <= totalPages; i++) {
+                    const button = document.createElement('button');
+                    button.textContent = i;
+                    button.className = `px-3 py-1 rounded-md ${currentPage === i ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`;
+                    button.addEventListener('click', () => {
+                        currentPage = i;
+                        updateTable();
+                    });
+                    pageNumbers.appendChild(button);
+                }
+
+                document.getElementById('nextPage').disabled = currentPage === totalPages;
+            }
+
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    currentPage = 1;
+                    updateTable();
+                }, 300);
+            });
+
+            entriesSelect.addEventListener('change', function() {
+                entriesPerPage = parseInt(this.value);
+                currentPage = 1;
+                updateTable();
+            });
+
+            document.getElementById('prevPage').addEventListener('click', function() {
+                if (currentPage > 1) {
+                    currentPage--;
+                    updateTable();
+                }
+            });
+
+            document.getElementById('nextPage').addEventListener('click', function() {
+                const totalPages = Math.ceil(originalRows.length / entriesPerPage);
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    updateTable();
+                }
+            });
+
+            updateTable();
+        });
     </script>
 
 </x-app-layout>

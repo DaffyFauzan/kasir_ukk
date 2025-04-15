@@ -7,7 +7,7 @@
 
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <!-- Add this notification section at the top -->
+            <!-- notification section at the top -->
             @if ($errors->any())
                 <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 relative" role="alert">
                     <strong class="font-bold">Error!</strong>
@@ -25,7 +25,7 @@
                 </div>
             @endif
 
-            <!-- Add this for session messages -->
+            <!-- session messages -->
             @if (session('error'))
                 <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 relative" role="alert">
                     <strong class="font-bold">Error!</strong>
@@ -64,6 +64,27 @@
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700">Products</label>
                             <div id="product-list">
+                                <div class="flex items-center space-x-4 mb-4">
+                                    <select id="productEntriesSelect" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                        <option value="10">10 entries</option>
+                                        <option value="25">25 entries</option>
+                                        <option value="50">50 entries</option>
+                                        <option value="100">100 entries</option>
+                                    </select>
+
+                                    <div class="relative flex-1 max-w-md">
+                                        <input type="text"
+                                            id="productSearchInput"
+                                            placeholder="Search products by name, price or stock..."
+                                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 pl-10 pr-4 py-2">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <table class="table-auto w-full border-collapse border border-gray-300">
                                     <thead>
                                         <tr class="bg-gray-100">
@@ -103,6 +124,22 @@
                                         @endforeach
                                     </tbody>
                                 </table>
+
+                                <div class="mt-4 flex items-center justify-between">
+                                    <div class="text-sm text-gray-700">
+                                        Showing <span id="productStartEntry">1</span> to <span id="productEndEntry">10</span> of <span id="productTotalEntries">0</span> entries
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button id="productPrevPage" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50">
+                                            Previous
+                                        </button>
+                                        <div id="productPageNumbers" class="flex space-x-1">
+                                        </div>
+                                        <button id="productNextPage" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50">
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -148,6 +185,13 @@
             const customerPhoneInput = document.getElementById('customer_phone');
             const memberStatus = document.getElementById('member-status');
 
+            const productSearchInput = document.getElementById('productSearchInput');
+            const productEntriesSelect = document.getElementById('productEntriesSelect');
+            const productRows = [...document.querySelectorAll('#product-list tbody tr')];
+            let productCurrentPage = 1;
+            let productEntriesPerPage = parseInt(productEntriesSelect.value);
+            let productDebounceTimer;
+
             customerTypeSelect.addEventListener('change', function () {
                 if (this.value === 'member') {
                     memberForm.classList.remove('hidden');
@@ -168,7 +212,6 @@
                 const customerType = customerTypeSelect.value;
                 let hasProducts = false;
 
-                // Check if any products are selected
                 productList.querySelectorAll('tbody tr').forEach(productRow => {
                     const checkbox = productRow.querySelector('input[type="checkbox"]');
                     const quantity = productRow.querySelector('input[type="number"]').value;
@@ -246,6 +289,84 @@
                     paymentWarning.classList.add('hidden');
                 }
             }
+
+            function updateProductTable() {
+                const searchTerm = productSearchInput.value.toLowerCase();
+                const filteredRows = productRows.filter(row => {
+                    const name = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                    const price = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                    const stock = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
+
+                    return name.includes(searchTerm) ||
+                        price.includes(searchTerm) ||
+                        stock.includes(searchTerm);
+                });
+
+                const totalPages = Math.ceil(filteredRows.length / productEntriesPerPage);
+                const startIndex = (productCurrentPage - 1) * productEntriesPerPage;
+                const endIndex = Math.min(startIndex + productEntriesPerPage, filteredRows.length);
+
+                document.getElementById('productStartEntry').textContent = filteredRows.length ? startIndex + 1 : 0;
+                document.getElementById('productEndEntry').textContent = endIndex;
+                document.getElementById('productTotalEntries').textContent = filteredRows.length;
+
+                productRows.forEach(row => row.classList.add('hidden'));
+
+                filteredRows.slice(startIndex, endIndex).forEach(row => row.classList.remove('hidden'));
+
+                updateProductPagination(totalPages);
+            }
+
+            function updateProductPagination(totalPages) {
+                const pageNumbers = document.getElementById('productPageNumbers');
+                pageNumbers.innerHTML = '';
+
+                document.getElementById('productPrevPage').disabled = productCurrentPage === 1;
+
+                for (let i = 1; i <= totalPages; i++) {
+                    const button = document.createElement('button');
+                    button.textContent = i;
+                    button.className = `px-3 py-1 rounded-md ${productCurrentPage === i ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`;
+                    button.addEventListener('click', () => {
+                        productCurrentPage = i;
+                        updateProductTable();
+                    });
+                    pageNumbers.appendChild(button);
+                }
+
+                document.getElementById('productNextPage').disabled = productCurrentPage === totalPages;
+            }
+
+            productSearchInput.addEventListener('input', function(e) {
+                clearTimeout(productDebounceTimer);
+                productDebounceTimer = setTimeout(() => {
+                    productCurrentPage = 1;
+                    updateProductTable();
+                }, 300);
+            });
+
+            productEntriesSelect.addEventListener('change', function() {
+                productEntriesPerPage = parseInt(this.value);
+                productCurrentPage = 1;
+                updateProductTable();
+            });
+
+            document.getElementById('productPrevPage').addEventListener('click', function() {
+                if (productCurrentPage > 1) {
+                    productCurrentPage--;
+                    updateProductTable();
+                }
+            });
+
+            document.getElementById('productNextPage').addEventListener('click', function() {
+                const totalPages = Math.ceil(productRows.length / productEntriesPerPage);
+                if (productCurrentPage < totalPages) {
+                    productCurrentPage++;
+                    updateProductTable();
+                }
+            });
+
+            updateProductTable();
         });
     </script>
 </x-app-layout>

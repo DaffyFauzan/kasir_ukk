@@ -17,7 +17,7 @@ class TransactionHistoryController extends Controller
     public function index()
     {
         $transactions = Sale::with(['detailSales.product', 'customer', 'staff'])
-            ->orderBy('id', 'desc')
+            ->orderBy('created_at', 'desc')
             ->get();
 
         return view('transactions.index', compact('transactions'));
@@ -53,20 +53,17 @@ class TransactionHistoryController extends Controller
                     ->with('error', 'Please check your input and try again.');
             }
 
-            // Validate if any products are selected and have valid quantities
             $hasProducts = false;
             $totalPrice = 0;
             $selectedProducts = [];
             $invalidQuantities = [];
 
-            // First pass: collect selected products
             foreach ($request->products as $productId => $productData) {
                 if (isset($productData['selected']) && $productData['selected']) {
                     $selectedProducts[] = $productId;
                 }
             }
 
-            // Second pass: validate quantities
             foreach ($request->products as $productId => $productData) {
                 if (isset($productData['quantity']) && $productData['quantity'] > 0) {
                     if (!in_array($productId, $selectedProducts)) {
@@ -77,7 +74,6 @@ class TransactionHistoryController extends Controller
                         $product = Product::findOrFail($productId);
                         $totalPrice += $product->price * $productData['quantity'];
 
-                        // Check stock availability
                         if ($productData['quantity'] > $product->stock) {
                             return back()
                                 ->withInput()
@@ -87,7 +83,6 @@ class TransactionHistoryController extends Controller
                 }
             }
 
-            // Check for quantities without product selection
             if (!empty($invalidQuantities)) {
                 return back()
                     ->withInput()
@@ -117,11 +112,10 @@ class TransactionHistoryController extends Controller
                     $customer = Customer::where('no_telp', $request->customer_phone)->first();
 
                     if (!$customer) {
-                        // Create new customer with only the points from this transaction
                         $customer = Customer::create([
                             'name' => 'New Member',
                             'no_telp' => $request->customer_phone,
-                            'poin' => 0, // Initialize with 0 points
+                            'poin' => 0,
                             'status' => 'new'
                         ]);
                     }
@@ -206,10 +200,10 @@ class TransactionHistoryController extends Controller
     {
         $transaction = Sale::with(['customer', 'detailSales.product'])->findOrFail($transactions);
 
-        // Calculate previous points correctly
+        // calculate previous points
         $previousPoints = 0;
         if ($transaction->customer && $transaction->customer->status === 'old') {
-            // Get the current available points from customer
+            // get the current available points from customer
             $previousPoints = $transaction->customer->poin;
         }
 
@@ -227,21 +221,21 @@ class TransactionHistoryController extends Controller
         $finalPrice = $transaction->total_price;
 
         if ($request->has('use_points') && $transaction->customer && $transaction->customer->status === 'old') {
-            // Calculate discount from points
+            //do some math and calculate discount from points
             $discount = $transaction->customer->poin;
             $finalPrice = $transaction->total_price - $discount;
 
-            // Update total_pay to reflect point usage
+            // update the total_pay to reflect point usage, and also to reflect your life choices
             $transaction->update([
                 'total_pay' => $finalPrice
             ]);
 
-            // Reset points to only new points earned
+            // reset the points to only new points earned
             $transaction->customer->update([
                 'poin' => $transaction->poin
             ]);
         } else {
-            // Add new points to existing points
+            // add new points to existing points
             $transaction->customer->increment('poin', $transaction->poin);
         }
 
@@ -252,7 +246,7 @@ class TransactionHistoryController extends Controller
             ]);
         }
 
-        // Refresh the model to get accurate values
+        // refresh the model to get accurate values
         $transaction->refresh();
 
         return view('transactions.final', [
