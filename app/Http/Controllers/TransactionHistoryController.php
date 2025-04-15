@@ -126,15 +126,18 @@ class TransactionHistoryController extends Controller
         $discount = 0;
         $finalPrice = $transaction->total_price;
 
-        if ($transaction->customer && $transaction->customer->status === 'old') {
-            $discount = $transaction->poin;
-            $finalPrice = $transaction->total_price - $discount;
+        // Check if points were actually used for discount
+        if ($transaction->total_pay < $transaction->total_price) {
+            // Points were used for discount
+            $discount = $transaction->total_price - $transaction->total_pay;
+            $finalPrice = $transaction->total_pay;
         }
 
         $pdf = Pdf::loadView('transactions.receipt', [
             'transaction' => $transaction,
             'discount' => $discount,
-            'finalPrice' => $finalPrice
+            'finalPrice' => $finalPrice,
+            'pointsUsed' => $discount > 0
         ]);
 
         return $pdf->download('receipt-' . $transaction->id . '.pdf');
@@ -165,18 +168,22 @@ class TransactionHistoryController extends Controller
         $finalPrice = $transaction->total_price;
 
         if ($request->has('use_points') && $transaction->customer && $transaction->customer->status === 'old') {
-            // Use current available points as discount
+            // Calculate discount from points
             $discount = $transaction->customer->poin;
+            $finalPrice = $transaction->total_price - $discount;
 
-            // Reset points to only new points earned from this transaction
+            // Update total_pay to reflect point usage
+            $transaction->update([
+                'total_pay' => $finalPrice
+            ]);
+
+            // Reset points to only new points earned
             $transaction->customer->update([
                 'poin' => $transaction->poin
             ]);
         } else {
-            // Add new points to existing points when not using points for discount
-            $transaction->customer->update([
-                'poin' => $transaction->customer->poin + $transaction->poin
-            ]);
+            // Add new points to existing points
+            $transaction->customer->increment('poin', $transaction->poin);
         }
 
         if ($request->has('name') && $transaction->customer->status === 'new') {
@@ -186,9 +193,7 @@ class TransactionHistoryController extends Controller
             ]);
         }
 
-        $finalPrice = max(0, $transaction->total_price - $discount);
-
-        // Refresh the model to get accurate point values
+        // Refresh the model to get accurate values
         $transaction->refresh();
 
         return view('transactions.final', [

@@ -80,11 +80,11 @@
             @if($transaction->customer && $transaction->customer->status === 'old')
                 <tr>
                     <td colspan="4" style="text-align: right;"><strong>Points Discount:</strong></td>
-                    <td>-Rp {{ number_format($discount ?? 0, 0, ',', '.') }}</td>
+                    <td>{{ $discount > 0 ? '-Rp ' . number_format($discount, 0, ',', '.') : 'Rp 0' }}</td>
                 </tr>
                 <tr>
                     <td colspan="4" style="text-align: right;"><strong>Final Price:</strong></td>
-                    <td>Rp {{ number_format($finalPrice ?? $transaction->total_price, 0, ',', '.') }}</td>
+                    <td>Rp {{ number_format($finalPrice, 0, ',', '.') }}</td>
                 </tr>
             @endif
             <tr>
