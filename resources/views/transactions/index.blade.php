@@ -60,10 +60,11 @@
                                             class="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">
                                             View Details
                                         </button>
-                                        <a href="{{ route('transactions.receipt', $transaction->id) }}"
-                                            class="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
-                                            Export PDF
-                                        </a>
+                                        <button class="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
+                                            <a href="{{ route('transactions.receipt', $transaction->id) }}">
+                                                Export PDF
+                                            </a>
+                                        </button>
                                     </td>
                                 </tr>
                             @endforeach

@@ -64,6 +64,7 @@
                                                     <input type="number" name="products[{{ $product->id }}][quantity]" min="1"
                                                         placeholder="Quantity"
                                                         class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:border-gray-300 disabled:cursor-not-allowed"
+                                                        value=""
                                                         {{ $product->stock <= 0 ? 'disabled' : '' }}>
                                                 </td>
                                             </tr>
@@ -105,7 +106,6 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // DOM Elements
             const productList = document.getElementById('product-list');
             const totalPayInput = document.getElementById('total_pay');
             const totalPriceDisplay = document.getElementById('total_price_display');
@@ -116,42 +116,57 @@
             const customerPhoneInput = document.getElementById('customer_phone');
             const memberStatus = document.getElementById('member-status');
 
-            // Event: Handle Customer Type Change
             customerTypeSelect.addEventListener('change', function () {
                 if (this.value === 'member') {
-                    memberForm.classList.remove('hidden'); // Show telephone input for members
+                    memberForm.classList.remove('hidden');
                 } else {
-                    memberForm.classList.add('hidden'); // Hide telephone input for non-members
-                    customerPhoneInput.value = ''; // Clear the telephone input
-                    memberStatus.textContent = ''; // Clear member status
+                    memberForm.classList.add('hidden');
+                    customerPhoneInput.value = '';
+                    memberStatus.textContent = '';
                 }
             });
 
-            // Event: Handle Product Selection and Quantity Input
             productList.addEventListener('input', updateTotalPrice);
 
-            // Event: Handle Total Payment Input
             totalPayInput.addEventListener('input', validatePayment);
 
-            // Event: Handle Form Submission
             form.addEventListener('submit', function (e) {
                 const totalPrice = updateTotalPrice();
                 const totalPay = parseInt(totalPayInput.value) || 0;
                 const customerType = customerTypeSelect.value;
 
-                console.log('Customer Type:', customerType);
-                console.log('Total Price:', totalPrice);
-                console.log('Total Pay:', totalPay);
-
-                // Skip validation for Non-Member
-                if (customerType === 'non-member') {
-                    return; // Allow form submission
+                if (customerType === 'member' && !customerPhoneInput.value.trim()) {
+                    e.preventDefault();
+                    alert('Please enter a valid telephone number for the member.');
+                    return;
                 }
 
-                // Validate payment for Member
                 if (totalPay < totalPrice) {
                     e.preventDefault();
                     alert('Total payment is less than the total price of the selected products. Please adjust the payment.');
+                    return;
+                }
+
+            });
+
+            customerPhoneInput.addEventListener('blur', async function() {
+                if (customerTypeSelect.value === 'member' && this.value.trim()) {
+                    try {
+                        const response = await fetch(`/check-customer?phone=${this.value.trim()}`);
+                        const data = await response.json();
+
+                        if (data.exists) {
+                            memberStatus.textContent = `Existing member: ${data.name}`;
+                            memberStatus.classList.remove('text-red-500');
+                            memberStatus.classList.add('text-green-500');
+                        } else {
+                            memberStatus.textContent = 'New member';
+                            memberStatus.classList.remove('text-green-500');
+                            memberStatus.classList.add('text-blue-500');
+                        }
+                    } catch (error) {
+                        console.error('Error checking customer:', error);
+                    }
                 }
             });
 

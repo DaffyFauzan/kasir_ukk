@@ -9,13 +9,15 @@ use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\TransactionsExport;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class TransactionHistoryController extends Controller
 {
     public function index()
     {
         $transactions = Sale::with(['detailSales.product', 'customer', 'staff'])
-            ->orderBy('sale_date', 'desc')
+            ->orderBy('id', 'desc')
             ->get();
 
         return view('transactions.index', compact('transactions'));
@@ -30,74 +32,89 @@ class TransactionHistoryController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $totalPrice = 0;
+        $validator = Validator::make($request->all(), [
             'customer_type' => 'required|in:member,non-member',
-            'customer_phone' => 'nullable|required_if:customer_type,member',
+            'customer_phone' => 'nullable',
             'products' => 'required|array',
-            'products.*.quantity' => 'required|integer|min:1',
+            'products.*.quantity' => 'nullable|integer|min:1',
             'total_pay' => 'required|numeric|min:0',
         ]);
 
-        $totalPrice = 0;
-        foreach ($request->products as $productId => $productData) {
-            $product = Product::findOrFail($productId);
-            $totalPrice += $product->price * $productData['quantity'];
-        }
+        $validated = $validator->validated();
 
-        if ($request->total_pay < $totalPrice) {
-            return back()->withErrors(['total_pay' => 'Total payment is less than the total price.']);
-        }
+        DB::beginTransaction();
+        try {
 
-        $customer = null;
-        $pointsUsed = 0;
-        $discount = 0;
-
-        if ($request->customer_type === 'member' && $request->customer_phone) {
-            $customer = Customer::firstOrCreate(
-                ['no_telp' => $request->customer_phone],
-                ['name' => 'New Member']
-            );
-
-            if ($customer->wasRecentlyCreated) {
-                $pointsUsed = 0;
-            } else {
-                $pointsUsed = min($customer->poin, $totalPrice);
-                $discount = $pointsUsed;
+            foreach ($request->products as $productId => $productData) {
+                if (isset($productData['quantity']) && $productData['quantity'] > 0) {
+                    $product = Product::findOrFail($productId);
+                    $totalPrice += $product->price * $productData['quantity'];
+                }
             }
 
-            $customer->poin = $customer->poin - $pointsUsed + floor(($totalPrice - $discount) * 0.01);
-            $customer->save();
-        }
+            if ($request->total_pay < $totalPrice) {
+                return back()->withErrors(['total_pay' => 'Total payment is less than the total price.']);
+            }
 
-        $sale = Sale::create([
-            'sale_date' => now(),
-            'total_price' => $totalPrice,
-            'total_pay' => $request->total_pay,
-            'total_return' => $request->total_pay - ($totalPrice - $discount),
-            'poin' => $pointsUsed,
-            'total_poin' => $customer ? $customer->poin : 0,
-            'customer_id' => $customer ? $customer->id : null,
-            'staff_id' => auth()->id(),
-            'customer_type' => $request->customer_type, // Save customer_type
-            'customer_phone' => $request->customer_phone, // Save customer_phone
-        ]);
+            $points = floor($totalPrice * 0.01);
 
-        foreach ($request->products as $productId => $productData) {
-            $product = Product::findOrFail($productId);
-            $sale->detailSales()->create([
-                'product_id' => $productId,
-                'amount' => $productData['quantity'],
-                'sub_total' => $product->price * $productData['quantity'],
+            $customer = null;
+            if ($validated['customer_type'] == "member" && !empty($validated['customer_phone'])) {
+                $customer = Customer::where('no_telp', $validated['customer_phone'])->first();
+
+                if ($customer) {
+                    $customer->poin += $points;
+                    $customer->status = 'old';
+                    $customer->save();
+                } else {
+                    $customer = Customer::create([
+                        'name' => 'New Member',
+                        'no_telp' => $validated['customer_phone'],
+                        'poin' => $points,
+                        'status' => 'new'
+                    ]);
+                }
+            }
+
+            $sale = Sale::create([
+                'sale_date' => now(),
+                'total_price' => $totalPrice,
+                'total_pay' => $request->total_pay,
+                'total_return' => $request->total_pay - $totalPrice,
+                'poin' => $points,
+                'total_poin' => $customer ? $customer->poin : 0,
+                'customer_id' => $customer ? $customer->id : null,
+                'staff_id' => auth()->id(),
             ]);
 
-            $product->decrement('stock', $productData['quantity']);
-        }
+            foreach ($request->products as $productId => $productData) {
+                if (isset($productData['quantity']) && $productData['quantity'] > 0) {
+                    $product = Product::findOrFail($productId);
+                    $sale->detailSales()->create([
+                        'product_id' => $productId,
+                        'amount' => $productData['quantity'],
+                        'sub_total' => $product->price * $productData['quantity'],
+                    ]);
 
-        if ($request->customer_type === 'member') {
-            return redirect()->route('transactions.points', $sale->id);
-        }
+                    $product->decrement('stock', $productData['quantity']);
+                }
+            }
 
-        return redirect()->route('transactions.index')->with('success', 'Transaction saved successfully.');
+            DB::commit();
+
+            if ($customer) {
+                return redirect()->route('transactions.points', ['transaction' => $sale->id])
+                    ->with('success', $customer->status === 'new' ? 'New member registered successfully!' : 'Points added to existing member!');
+            }
+
+            return redirect()->route('transactions.index')
+                ->with('success', 'Transaction saved successfully.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 
     public function export()
@@ -107,27 +124,58 @@ class TransactionHistoryController extends Controller
 
     public function exportReceipt(Sale $transaction)
     {
-        $transaction->load(['detailSales.product', 'customer', 'staff']);
+        $transaction->load('detailSales.product', 'customer', 'staff');
 
-        $pdf = Pdf::loadView('transactions.receipt', compact('transaction'));
+        $discount = 0;
+        $finalPrice = $transaction->total_price;
+
+        if ($transaction->customer && $transaction->customer->status === 'old') {
+            $discount = $transaction->poin;
+            $finalPrice = $transaction->total_price - $discount;
+        }
+
+        $pdf = Pdf::loadView('transactions.receipt', [
+            'transaction' => $transaction,
+            'discount' => $discount,
+            'finalPrice' => $finalPrice
+        ]);
+
         return $pdf->download('receipt-' . $transaction->id . '.pdf');
     }
 
-    public function points(Sale $transaction)
+    public function points($transactions)
     {
-        $transaction->load('customer');
+        $transaction = Sale::findOrFail($transactions);
         return view('transactions.points', compact('transaction'));
     }
 
-    public function finalize(Request $request, Sale $transaction)
+    public function finalize(Request $request, $transaction)
     {
-        $usePoints = $request->has('use_points');
-        $discount = $usePoints ? $transaction->poin : 0;
+        $transaction = Sale::with(['customer', 'detailSales.product'])->findOrFail($transaction);
+
+        if ($request->has('name') && $transaction->customer->status === 'new') {
+            $transaction->customer->update([
+                'name' => $request->name,
+                'status' => 'old'
+            ]);
+        }
+
+        $discount = 0;
+        if ($request->has('use_points') && $transaction->customer->status === 'old') {
+            $discount = $transaction->customer->poin;
+            $transaction->customer->update([
+                'poin' => 0
+            ]);
+        }
+
+        $finalPrice = $transaction->total_price - $discount;
+
+        $finalPrice = max(0, $finalPrice);
 
         return view('transactions.final', [
             'transaction' => $transaction,
             'discount' => $discount,
-            'finalPrice' => $transaction->total_price - $discount,
+            'finalPrice' => $finalPrice
         ]);
     }
 }

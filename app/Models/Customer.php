@@ -13,5 +13,6 @@ class Customer extends Model
         'name',
         'no_telp',
         'poin',
+        'status',
     ];
 }
