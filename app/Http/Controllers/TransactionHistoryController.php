@@ -63,15 +63,12 @@ class TransactionHistoryController extends Controller
             if ($validated['customer_type'] == "member" && !empty($validated['customer_phone'])) {
                 $customer = Customer::where('no_telp', $validated['customer_phone'])->first();
 
-                if ($customer) {
-                    $customer->poin += $points;
-                    $customer->status = 'old';
-                    $customer->save();
-                } else {
+                if (!$customer) {
+                    // Create new customer with only the points from this transaction
                     $customer = Customer::create([
                         'name' => 'New Member',
                         'no_telp' => $validated['customer_phone'],
-                        'poin' => $points,
+                        'poin' => 0, // Initialize with 0 points
                         'status' => 'new'
                     ]);
                 }
@@ -145,13 +142,42 @@ class TransactionHistoryController extends Controller
 
     public function points($transactions)
     {
-        $transaction = Sale::findOrFail($transactions);
-        return view('transactions.points', compact('transaction'));
+        $transaction = Sale::with(['customer', 'detailSales.product'])->findOrFail($transactions);
+
+        // Calculate previous points correctly
+        $previousPoints = 0;
+        if ($transaction->customer && $transaction->customer->status === 'old') {
+            // Get the current available points from customer
+            $previousPoints = $transaction->customer->poin;
+        }
+
+        return view('transactions.points', [
+            'transaction' => $transaction,
+            'previousPoints' => $previousPoints
+        ]);
     }
 
     public function finalize(Request $request, $transaction)
     {
         $transaction = Sale::with(['customer', 'detailSales.product'])->findOrFail($transaction);
+
+        $discount = 0;
+        $finalPrice = $transaction->total_price;
+
+        if ($request->has('use_points') && $transaction->customer && $transaction->customer->status === 'old') {
+            // Use current available points as discount
+            $discount = $transaction->customer->poin;
+
+            // Reset points to only new points earned from this transaction
+            $transaction->customer->update([
+                'poin' => $transaction->poin
+            ]);
+        } else {
+            // Add new points to existing points when not using points for discount
+            $transaction->customer->update([
+                'poin' => $transaction->customer->poin + $transaction->poin
+            ]);
+        }
 
         if ($request->has('name') && $transaction->customer->status === 'new') {
             $transaction->customer->update([
@@ -160,17 +186,10 @@ class TransactionHistoryController extends Controller
             ]);
         }
 
-        $discount = 0;
-        if ($request->has('use_points') && $transaction->customer->status === 'old') {
-            $discount = $transaction->customer->poin;
-            $transaction->customer->update([
-                'poin' => 0
-            ]);
-        }
+        $finalPrice = max(0, $transaction->total_price - $discount);
 
-        $finalPrice = $transaction->total_price - $discount;
-
-        $finalPrice = max(0, $finalPrice);
+        // Refresh the model to get accurate point values
+        $transaction->refresh();
 
         return view('transactions.final', [
             'transaction' => $transaction,

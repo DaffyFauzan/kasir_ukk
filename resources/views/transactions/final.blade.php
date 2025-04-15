@@ -38,6 +38,13 @@
                     </div>
 
                     <div class="mb-6">
+                        <h3 class="font-medium text-gray-700 mb-2">Points Information</h3>
+                        <p><strong>Previous Points:</strong> {{ $transaction->customer->poin - $transaction->poin }}</p>
+                        <p><strong>Points Earned This Transaction:</strong> {{ $transaction->poin }}</p>
+                        <p><strong>Total Points After Transaction:</strong> {{ $transaction->customer->poin }}</p>
+                    </div>
+
+                    <div class="mb-6">
                         <h3 class="font-medium text-gray-700 mb-2">Payment Details</h3>
                         <p><strong>Total Price:</strong> Rp {{ number_format($transaction->total_price, 0, ',', '.') }}</p>
                         @if($discount > 0)

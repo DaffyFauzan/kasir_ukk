@@ -41,9 +41,9 @@
                                 <div class="mb-4">
                                     <label class="flex items-center">
                                         <input type="checkbox" name="use_points" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                                        <span class="ml-2">Use points for discount (Available: {{ $transaction->customer->poin }} points)</span>
+                                        <span class="ml-2">Use previous points for discount (Available: {{ $previousPoints }} points)</span>
                                     </label>
-                                    <p class="text-sm text-gray-500 mt-1">Points will be deducted from total price</p>
+                                    <p class="text-sm text-gray-500 mt-1">Current transaction points ({{ $transaction->poin }}) will be added after purchase</p>
                                 </div>
                             @else
                                 <p class="text-sm text-yellow-600 mb-4">New members cannot use points for discount yet.</p>
