@@ -32,85 +32,144 @@ class TransactionHistoryController extends Controller
 
     public function store(Request $request)
     {
-        $totalPrice = 0;
-        $validator = Validator::make($request->all(), [
-            'customer_type' => 'required|in:member,non-member',
-            'customer_phone' => 'nullable',
-            'products' => 'required|array',
-            'products.*.quantity' => 'nullable|integer|min:1',
-            'total_pay' => 'required|numeric|min:0',
-        ]);
-
-        $validated = $validator->validated();
-
-        DB::beginTransaction();
         try {
+            $validator = Validator::make($request->all(), [
+                'customer_type' => 'required|in:member,non-member',
+                'customer_phone' => 'required_if:customer_type,member',
+                'products' => 'required|array',
+                'total_pay' => 'required|numeric|min:0',
+            ], [
+                'customer_phone.required_if' => 'The phone number is required for members.',
+                'products.required' => 'Please select at least one product.',
+                'total_pay.required' => 'Please enter the payment amount.',
+                'total_pay.numeric' => 'The payment amount must be a number.',
+                'total_pay.min' => 'The payment amount cannot be negative.',
+            ]);
 
+            if ($validator->fails()) {
+                return back()
+                    ->withErrors($validator)
+                    ->withInput()
+                    ->with('error', 'Please check your input and try again.');
+            }
+
+            // Validate if any products are selected and have valid quantities
+            $hasProducts = false;
+            $totalPrice = 0;
+            $selectedProducts = [];
+            $invalidQuantities = [];
+
+            // First pass: collect selected products
+            foreach ($request->products as $productId => $productData) {
+                if (isset($productData['selected']) && $productData['selected']) {
+                    $selectedProducts[] = $productId;
+                }
+            }
+
+            // Second pass: validate quantities
             foreach ($request->products as $productId => $productData) {
                 if (isset($productData['quantity']) && $productData['quantity'] > 0) {
-                    $product = Product::findOrFail($productId);
-                    $totalPrice += $product->price * $productData['quantity'];
+                    if (!in_array($productId, $selectedProducts)) {
+                        $product = Product::findOrFail($productId);
+                        $invalidQuantities[] = $product->name;
+                    } else {
+                        $hasProducts = true;
+                        $product = Product::findOrFail($productId);
+                        $totalPrice += $product->price * $productData['quantity'];
+
+                        // Check stock availability
+                        if ($productData['quantity'] > $product->stock) {
+                            return back()
+                                ->withInput()
+                                ->withErrors(['error' => "Insufficient stock for {$product->name}. Available: {$product->stock}"]);
+                        }
+                    }
                 }
+            }
+
+            // Check for quantities without product selection
+            if (!empty($invalidQuantities)) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['error' => 'Please select these products before setting their quantities: ' . implode(', ', $invalidQuantities)]);
+            }
+
+            if (!$hasProducts) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['error' => 'Please select at least one product and specify its quantity.']);
             }
 
             if ($request->total_pay < $totalPrice) {
-                return back()->withErrors(['total_pay' => 'Total payment is less than the total price.']);
+                return back()
+                    ->withInput()
+                    ->withErrors(['error' => "Payment amount (Rp " . number_format($request->total_pay, 0, ',', '.') .
+                        ") is less than total price (Rp " . number_format($totalPrice, 0, ',', '.') . ")"]);
             }
 
-            $points = floor($totalPrice * 0.01);
+            DB::beginTransaction();
+            try {
 
-            $customer = null;
-            if ($validated['customer_type'] == "member" && !empty($validated['customer_phone'])) {
-                $customer = Customer::where('no_telp', $validated['customer_phone'])->first();
+                $points = floor($totalPrice * 0.01);
 
-                if (!$customer) {
-                    // Create new customer with only the points from this transaction
-                    $customer = Customer::create([
-                        'name' => 'New Member',
-                        'no_telp' => $validated['customer_phone'],
-                        'poin' => 0, // Initialize with 0 points
-                        'status' => 'new'
-                    ]);
+                $customer = null;
+                if ($request->customer_type == "member" && !empty($request->customer_phone)) {
+                    $customer = Customer::where('no_telp', $request->customer_phone)->first();
+
+                    if (!$customer) {
+                        // Create new customer with only the points from this transaction
+                        $customer = Customer::create([
+                            'name' => 'New Member',
+                            'no_telp' => $request->customer_phone,
+                            'poin' => 0, // Initialize with 0 points
+                            'status' => 'new'
+                        ]);
+                    }
                 }
-            }
 
-            $sale = Sale::create([
-                'sale_date' => now(),
-                'total_price' => $totalPrice,
-                'total_pay' => $request->total_pay,
-                'total_return' => $request->total_pay - $totalPrice,
-                'poin' => $points,
-                'total_poin' => $customer ? $customer->poin : 0,
-                'customer_id' => $customer ? $customer->id : null,
-                'staff_id' => auth()->id(),
-            ]);
+                $sale = Sale::create([
+                    'sale_date' => now(),
+                    'total_price' => $totalPrice,
+                    'total_pay' => $request->total_pay,
+                    'total_return' => $request->total_pay - $totalPrice,
+                    'poin' => $points,
+                    'total_poin' => $customer ? $customer->poin : 0,
+                    'customer_id' => $customer ? $customer->id : null,
+                    'staff_id' => auth()->id(),
+                ]);
 
-            foreach ($request->products as $productId => $productData) {
-                if (isset($productData['quantity']) && $productData['quantity'] > 0) {
-                    $product = Product::findOrFail($productId);
-                    $sale->detailSales()->create([
-                        'product_id' => $productId,
-                        'amount' => $productData['quantity'],
-                        'sub_total' => $product->price * $productData['quantity'],
-                    ]);
+                foreach ($request->products as $productId => $productData) {
+                    if (isset($productData['quantity']) && $productData['quantity'] > 0) {
+                        $product = Product::findOrFail($productId);
+                        $sale->detailSales()->create([
+                            'product_id' => $productId,
+                            'amount' => $productData['quantity'],
+                            'sub_total' => $product->price * $productData['quantity'],
+                        ]);
 
-                    $product->decrement('stock', $productData['quantity']);
+                        $product->decrement('stock', $productData['quantity']);
+                    }
                 }
+
+                DB::commit();
+
+                if ($customer) {
+                    return redirect()->route('transactions.points', ['transaction' => $sale->id])
+                        ->with('success', $customer->status === 'new' ? 'New member registered successfully!' : 'Points added to existing member!');
+                }
+
+                return redirect()->route('transactions.index')
+                    ->with('success', 'Transaction saved successfully.');
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return back()->withErrors(['error' => $e->getMessage()]);
             }
-
-            DB::commit();
-
-            if ($customer) {
-                return redirect()->route('transactions.points', ['transaction' => $sale->id])
-                    ->with('success', $customer->status === 'new' ? 'New member registered successfully!' : 'Points added to existing member!');
-            }
-
-            return redirect()->route('transactions.index')
-                ->with('success', 'Transaction saved successfully.');
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->withErrors(['error' => $e->getMessage()]);
+            return back()
+                ->withInput()
+                ->withErrors(['error' => 'An unexpected error occurred: ' . $e->getMessage()]);
         }
     }
 

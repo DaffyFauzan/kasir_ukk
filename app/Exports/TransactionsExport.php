@@ -122,6 +122,22 @@ class TransactionsExport implements FromCollection, WithTitle, WithStyles
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 
+        // Center align all cells in the worksheet
+        $lastRow = $sheet->getHighestRow();
+        $lastColumn = 'O';
+
+        $sheet->getStyle('A1:' . $lastColumn . $lastRow)->applyFromArray([
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+            ]
+        ]);
+
+        // AutoSize columns
+        foreach(range('A', $lastColumn) as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+
         return [
             3 => ['font' => ['bold' => true]],
         ];

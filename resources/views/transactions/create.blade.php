@@ -7,6 +7,38 @@
 
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <!-- Add this notification section at the top -->
+            @if ($errors->any())
+                <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 relative" role="alert">
+                    <strong class="font-bold">Error!</strong>
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                    <button onclick="this.parentElement.remove()" class="absolute top-0 right-0 mt-4 mr-4">
+                        <svg class="h-4 w-4 fill-current" role="button" viewBox="0 0 20 20">
+                            <title>Close</title>
+                            <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
+                        </svg>
+                    </button>
+                </div>
+            @endif
+
+            <!-- Add this for session messages -->
+            @if (session('error'))
+                <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 relative" role="alert">
+                    <strong class="font-bold">Error!</strong>
+                    <p>{{ session('error') }}</p>
+                    <button onclick="this.parentElement.remove()" class="absolute top-0 right-0 mt-4 mr-4">
+                        <svg class="h-4 w-4 fill-current" role="button" viewBox="0 0 20 20">
+                            <title>Close</title>
+                            <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
+                        </svg>
+                    </button>
+                </div>
+            @endif
+
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
                     <form action="{{ route('transactions.store') }}" method="POST">
@@ -134,6 +166,22 @@
                 const totalPrice = updateTotalPrice();
                 const totalPay = parseInt(totalPayInput.value) || 0;
                 const customerType = customerTypeSelect.value;
+                let hasProducts = false;
+
+                // Check if any products are selected
+                productList.querySelectorAll('tbody tr').forEach(productRow => {
+                    const checkbox = productRow.querySelector('input[type="checkbox"]');
+                    const quantity = productRow.querySelector('input[type="number"]').value;
+                    if (checkbox && checkbox.checked && quantity > 0) {
+                        hasProducts = true;
+                    }
+                });
+
+                if (!hasProducts) {
+                    e.preventDefault();
+                    alert('Please select at least one product and specify its quantity.');
+                    return;
+                }
 
                 if (customerType === 'member' && !customerPhoneInput.value.trim()) {
                     e.preventDefault();
@@ -143,10 +191,9 @@
 
                 if (totalPay < totalPrice) {
                     e.preventDefault();
-                    alert('Total payment is less than the total price of the selected products. Please adjust the payment.');
+                    alert('Total payment is less than the total price. Please check the payment amount.');
                     return;
                 }
-
             });
 
             customerPhoneInput.addEventListener('blur', async function() {
