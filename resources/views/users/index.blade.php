@@ -34,17 +34,17 @@
                                     <td class="border border-gray-300 px-4 py-2">{{ $user->email }}</td>
                                     <td class="border border-gray-300 px-4 py-2">{{ $user->role }}</td>
                                     <td class="border border-gray-300 px-4 py-2 text-center">
+                                        @if(Auth::id() !== $user->id)
                                         <button class="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">
                                             <a href="{{ route('users.edit', $user) }}">
                                                 Edit
                                             </a>
                                         </button>
-                                        @if(Auth::id() !== $user->id)
-                                            <button type="button"
-                                                onclick="showModal('{{ $user->id }}')"
-                                                class="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
-                                                Delete
-                                            </button>
+                                        <button type="button"
+                                        onclick="showModal('{{ $user->id }}')"
+                                        class="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
+                                        Delete
+                                    </button>
                                         @endif
                                     </td>
                                 </tr>
