@@ -19,9 +19,12 @@ class TransactionsExport implements FromCollection, WithTitle, WithStyles
         ];
 
         $sales = Sale::with(['customer', 'staff', 'detailSales.product'])->get();
+        $previousCustomerId = null;
 
         foreach ($sales as $sale) {
             $isFirstRow = true;
+            $sameCustomer = $previousCustomerId === $sale->customer_id && $sale->customer_id !== null;
+            $previousCustomerId = $sale->customer_id;
 
             $discount = 0;
             $finalPrice = $sale->total_price;
@@ -33,6 +36,7 @@ class TransactionsExport implements FromCollection, WithTitle, WithStyles
 
             foreach ($sale->detailSales as $detail) {
                 $rows[] = [
+                    'Transaction ID' => '#' . $sale->id . ($sameCustomer ? ' (Repeat)' : ''),
                     'Date' => $sale->sale_date,
                     'Customer Name' => $sale->customer->name ?? 'Non-Member',
                     'Customer Phone' => $sale->customer->no_telp ?? 'N/A',
@@ -102,29 +106,30 @@ class TransactionsExport implements FromCollection, WithTitle, WithStyles
             ]
         ]);
 
-        $sheet->setCellValue('A3', 'Date');
-        $sheet->setCellValue('B3', 'Customer Name');
-        $sheet->setCellValue('C3', 'Phone Number');
-        $sheet->setCellValue('D3', 'Points');
-        $sheet->setCellValue('E3', 'Staff Name');
-        $sheet->setCellValue('F3', 'Product Name');
-        $sheet->setCellValue('G3', 'Quantity');
-        $sheet->setCellValue('H3', 'Unit Price');
-        $sheet->setCellValue('I3', 'Subtotal');
-        $sheet->setCellValue('J3', 'Total Price');
-        $sheet->setCellValue('K3', 'Points Discount');
-        $sheet->setCellValue('L3', 'Final Price');
-        $sheet->setCellValue('M3', 'Amount Paid');
-        $sheet->setCellValue('N3', 'Change');
-        $sheet->setCellValue('O3', 'Points Earned');
+        $sheet->setCellValue('A3', 'Transaction ID');
+        $sheet->setCellValue('B3', 'Date');
+        $sheet->setCellValue('C3', 'Customer Name');
+        $sheet->setCellValue('D3', 'Phone Number');
+        $sheet->setCellValue('E3', 'Points');
+        $sheet->setCellValue('F3', 'Staff Name');
+        $sheet->setCellValue('G3', 'Product Name');
+        $sheet->setCellValue('H3', 'Quantity');
+        $sheet->setCellValue('I3', 'Unit Price');
+        $sheet->setCellValue('J3', 'Subtotal');
+        $sheet->setCellValue('K3', 'Total Price');
+        $sheet->setCellValue('L3', 'Points Discount');
+        $sheet->setCellValue('M3', 'Final Price');
+        $sheet->setCellValue('N3', 'Amount Paid');
+        $sheet->setCellValue('O3', 'Change');
+        $sheet->setCellValue('P3', 'Points Earned');
 
-        foreach(range('A','O') as $column) {
+        foreach(range('A','P') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 
-        // Center align all cells in the worksheet
+        // align
         $lastRow = $sheet->getHighestRow();
-        $lastColumn = 'O';
+        $lastColumn = 'P';
 
         $sheet->getStyle('A1:' . $lastColumn . $lastRow)->applyFromArray([
             'alignment' => [
@@ -133,7 +138,7 @@ class TransactionsExport implements FromCollection, WithTitle, WithStyles
             ]
         ]);
 
-        // AutoSize columns
+        // autoSize
         foreach(range('A', $lastColumn) as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }

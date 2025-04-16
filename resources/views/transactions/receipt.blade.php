@@ -36,8 +36,11 @@
 <body>
     <div class="header-section">
         <h2>Transaction Receipt</h2>
-        <p><strong>Transaction Date:</strong> {{ $transaction->sale_date }}</p>
         <p><strong>Transaction ID:</strong> #{{ $transaction->id }}</p>
+        <p><strong>Transaction Date:</strong> {{ $transaction->sale_date }}</p>
+        @if($transaction->customer && $previousTransactions > 0)
+            <p class="text-blue-600"><strong>Previous Transactions:</strong> {{ $previousTransactions }}</p>
+        @endif
     </div>
 
     <div class="customer-info">

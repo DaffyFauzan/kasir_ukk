@@ -51,6 +51,7 @@
                     <table class="table-auto w-full border-collapse border border-gray-300">
                         <thead>
                             <tr class="bg-gray-100">
+                                <th class="border border-gray-300 px-4 py-2">Transaction ID</th>
                                 <th class="border border-gray-300 px-4 py-2">Date</th>
                                 <th class="border border-gray-300 px-4 py-2">Customer</th>
                                 <th class="border border-gray-300 px-4 py-2">Staff</th>
@@ -63,6 +64,22 @@
                         <tbody>
                             @foreach ($transactions as $transaction)
                                 <tr class="hover:bg-gray-50">
+                                    <td class="border border-gray-300 px-4 py-2">
+                                        @if($transaction->customer)
+                                            <span class="px-2 py-1 rounded-full text-sm
+                                                {{ $loop->index > 0 &&
+                                                $transactions[$loop->index - 1]->customer_id === $transaction->customer_id
+                                                ? 'bg-blue-100 text-blue-800'
+                                                : 'bg-gray-100 text-gray-800'
+                                                }}">
+                                                #{{ $transaction->id }}
+                                            </span>
+                                        @else
+                                            <span class="px-2 py-1 rounded-full bg-gray-100 text-gray-800 text-sm">
+                                                #{{ $transaction->id }}
+                                            </span>
+                                        @endif
+                                    </td>
                                     <td class="border border-gray-300 px-4 py-2">
                                         {{ \Carbon\Carbon::parse($transaction->created_at)->format('Y-m-d H:i:s') }}
                                     </td>

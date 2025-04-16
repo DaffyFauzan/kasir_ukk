@@ -176,12 +176,17 @@ class TransactionHistoryController extends Controller
     {
         $transaction->load('detailSales.product', 'customer', 'staff');
 
+        $previousTransactions = 0;
+        if ($transaction->customer) {
+            $previousTransactions = Sale::where('customer_id', $transaction->customer_id)
+                ->where('id', '<', $transaction->id)
+                ->count();
+        }
+
         $discount = 0;
         $finalPrice = $transaction->total_price;
 
-        // Check if points were actually used for discount
         if ($transaction->total_pay < $transaction->total_price) {
-            // Points were used for discount
             $discount = $transaction->total_price - $transaction->total_pay;
             $finalPrice = $transaction->total_pay;
         }
@@ -190,7 +195,8 @@ class TransactionHistoryController extends Controller
             'transaction' => $transaction,
             'discount' => $discount,
             'finalPrice' => $finalPrice,
-            'pointsUsed' => $discount > 0
+            'pointsUsed' => $discount > 0,
+            'previousTransactions' => $previousTransactions
         ]);
 
         return $pdf->download('receipt-' . $transaction->id . '.pdf');
@@ -200,10 +206,8 @@ class TransactionHistoryController extends Controller
     {
         $transaction = Sale::with(['customer', 'detailSales.product'])->findOrFail($transactions);
 
-        // calculate previous points
         $previousPoints = 0;
         if ($transaction->customer && $transaction->customer->status === 'old') {
-            // get the current available points from customer
             $previousPoints = $transaction->customer->poin;
         }
 
@@ -221,7 +225,6 @@ class TransactionHistoryController extends Controller
         $finalPrice = $transaction->total_price;
 
         if ($request->has('use_points') && $transaction->customer && $transaction->customer->status === 'old') {
-            //do some math and calculate discount from points
             $discount = $transaction->customer->poin;
             $finalPrice = $transaction->total_price - $discount;
 
@@ -246,7 +249,6 @@ class TransactionHistoryController extends Controller
             ]);
         }
 
-        // refresh the model to get accurate values
         $transaction->refresh();
 
         return view('transactions.final', [
